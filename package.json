@@ -1,0 +1,11 @@
+{
+  "name": "talkcare-api",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Shim so Render's Node runtime builds and runs the Spring Boot API (see scripts/render-*.sh).",
+  "scripts": {
+    "build": "bash scripts/render-build.sh",
+    "db:migrate": "bash scripts/render-build.sh",
+    "start": "bash scripts/render-start.sh"
+  }
+}
