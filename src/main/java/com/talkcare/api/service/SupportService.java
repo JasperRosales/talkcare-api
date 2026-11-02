@@ -1,8 +1,11 @@
 package com.talkcare.api.service;
 
-import com.talkcare.api.domain.activity.Notification;
 import com.talkcare.api.domain.account.Account;
+import com.talkcare.api.domain.activity.Notification;
+import com.talkcare.api.repository.AccountRepository;
+import com.talkcare.api.repository.ActivityRepository;
 import com.talkcare.api.repository.LookupRepository;
+import com.talkcare.api.web.dto.ContactRequest;
 import com.talkcare.api.repository.NotificationRepository;
 import com.talkcare.api.web.dto.LookupsResponse;
 import java.util.List;
@@ -18,11 +21,16 @@ public class SupportService {
     private final JdbcClient jdbc;
     private final LookupRepository lookups;
     private final NotificationRepository notifications;
+    private final AccountRepository accounts;
+    private final ActivityRepository activity;
 
-    public SupportService(JdbcClient jdbc, LookupRepository lookups, NotificationRepository notifications) {
+    public SupportService(JdbcClient jdbc, LookupRepository lookups, NotificationRepository notifications,
+                          AccountRepository accounts, ActivityRepository activity) {
         this.jdbc = jdbc;
         this.lookups = lookups;
         this.notifications = notifications;
+        this.accounts = accounts;
+        this.activity = activity;
     }
 
     /** Throws {@link DataAccessException} when the database is unreachable. */
@@ -37,6 +45,20 @@ public class SupportService {
 
     public List<Notification> notifications(Account actor) {
         return notifications.findForUser(actor.id());
+    }
+
+    /**
+     * A contact-form message: every active administrator gets it as a notification, and it is
+     * written to the activity log. {@code actor} is null for visitors who are not signed in.
+     */
+    @Transactional
+    public void contact(Account actor, ContactRequest request) {
+        String text = "Contact message from " + request.name() + " <" + request.email() + ">: " + request.message();
+        for (int adminId : accounts.activeAdminIds()) {
+            notifications.create(adminId, Notification.SYSTEM, text);
+        }
+        activity.log(new ActivityRepository.NewActivity(actor == null ? null : actor.id(), "CONTACT",
+                actor == null ? 0 : actor.id(), "MESSAGE", text.length() > 500 ? text.substring(0, 500) + "…" : text));
     }
 
     public void markNotificationsRead(Account actor) {

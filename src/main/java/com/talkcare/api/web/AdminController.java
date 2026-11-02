@@ -3,6 +3,7 @@ package com.talkcare.api.web;
 import com.talkcare.api.domain.Permission;
 import com.talkcare.api.domain.account.Account;
 import com.talkcare.api.service.AdminService;
+import com.talkcare.api.service.InputRules;
 import com.talkcare.api.web.dto.AccountResponse;
 import com.talkcare.api.web.dto.ActivityResponse;
 import com.talkcare.api.web.dto.PendingRequestResponse;
@@ -15,6 +16,8 @@ import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,6 +48,15 @@ public class AdminController {
     @PreAuthorize("hasAuthority('" + Permission.USERS_READ + "')")
     public List<AccountResponse> users() {
         return admin.users().stream().map(AccountResponse::from).toList();
+    }
+
+    /** Body: {@code {"action": "SUSPEND" | "DEACTIVATE" | "REACTIVATE"}}. */
+    @PatchMapping("/users/{id}/status")
+    @PreAuthorize("hasAuthority('" + Permission.USERS_MANAGE + "')")
+    public AccountResponse setUserStatus(@AuthenticationPrincipal Account actor, @PathVariable String id,
+                                         @RequestBody java.util.Map<String, String> body) {
+        return AccountResponse.from(admin.setUserStatus(actor, InputRules.positiveId(id, "user id"),
+                body == null ? null : body.get("action")));
     }
 
     @GetMapping("/pending-requests")

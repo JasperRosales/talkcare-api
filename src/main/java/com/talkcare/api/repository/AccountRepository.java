@@ -230,6 +230,16 @@ public class AccountRepository {
                 .update();
     }
 
+    /** Active administrators (recipients of contact-form messages). */
+    public List<Integer> activeAdminIds() {
+        return jdbc.sql("""
+                        SELECT u.id FROM users u JOIN roles r ON r.role_id = u.role_id
+                        WHERE r.code = 'ADMIN' AND u.status NOT IN ('SUSPENDED', 'DEACTIVATED')
+                        """)
+                .query(Integer.class)
+                .list();
+    }
+
     public int countAll() {
         return jdbc.sql("SELECT COUNT(*)::int FROM users").query(Integer.class).single();
     }

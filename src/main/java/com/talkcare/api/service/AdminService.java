@@ -117,6 +117,40 @@ public class AdminService {
         }
     }
 
+    /**
+     * Suspends, deactivates or reactivates an account. Suspended and deactivated accounts cannot
+     * sign in, and their existing sessions stop working on the next request. Reactivating restores
+     * VERIFIED when the latest identity verification was approved, otherwise ACTIVE.
+     */
+    @Transactional
+    public Account setUserStatus(Account actor, int userId, String action) {
+        if (!actor.can(Permission.USERS_MANAGE)) {
+            throw new ForbiddenException();
+        }
+        if (userId == actor.id()) {
+            throw new ValidationException("You cannot change the status of your own account.");
+        }
+        Account target = accounts.findById(userId)
+                .orElseThrow(() -> new com.talkcare.api.error.NotFoundException("User not found."));
+        UserStatus status = switch (action == null ? "" : action.strip().toUpperCase(Locale.ROOT)) {
+            case "SUSPEND" -> UserStatus.SUSPENDED;
+            case "DEACTIVATE" -> UserStatus.DEACTIVATED;
+            case "REACTIVATE" -> target.verification() != null && "APPROVED".equals(target.verification().status())
+                    ? UserStatus.VERIFIED : UserStatus.ACTIVE;
+            default -> throw new ValidationException("Unknown account action.");
+        };
+        accounts.setStatus(userId, status);
+        String verb = switch (status) {
+            case SUSPENDED -> "suspended";
+            case DEACTIVATED -> "deactivated";
+            default -> "reactivated";
+        };
+        activity.log(new ActivityRepository.NewActivity(actor.id(), "USER", userId, status.name(),
+                "Account " + verb + ": " + target.displayName()));
+        notifications.create(userId, Notification.SYSTEM, "Your account was " + verb + " by an administrator.");
+        return accounts.findById(userId).orElseThrow();
+    }
+
     public List<ActivityEntry> recentActivity() {
         return activity.recent(ACTIVITY_LIMIT);
     }

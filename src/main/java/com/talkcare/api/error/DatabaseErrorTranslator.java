@@ -45,6 +45,9 @@ public class DatabaseErrorTranslator {
         if (CHECK_VIOLATION.equals(psql.getSQLState()) && raisedByTrigger && server.getMessage() != null) {
             return server.getMessage();
         }
+        if (server != null && "appointments_professional_slot_uk".equals(server.getConstraint())) {
+            return MAPPINGS.get("23P01").message();
+        }
         return mapping.message();
     }
 

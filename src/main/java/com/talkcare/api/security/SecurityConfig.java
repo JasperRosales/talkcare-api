@@ -46,7 +46,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/health", "/api/lookups").permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/login", "/api/auth/register", "/api/auth/logout",
-                                "/api/auth/register/attorney", "/api/auth/register/psychiatrist",
+                                "/api/auth/register/attorney", "/api/auth/register/psychiatrist", "/api/contact",
                                 "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(errors).accessDeniedHandler(errors))

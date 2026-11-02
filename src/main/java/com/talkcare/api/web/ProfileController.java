@@ -8,6 +8,7 @@ import com.talkcare.api.service.SupportService;
 import com.talkcare.api.service.VerificationService;
 import com.talkcare.api.web.dto.AccountResponse;
 import com.talkcare.api.web.dto.NotificationResponse;
+import com.talkcare.api.web.dto.ContactRequest;
 import com.talkcare.api.web.dto.PhotoUploadRequest;
 import com.talkcare.api.web.dto.SimpleResponses.Photo;
 import com.talkcare.api.web.dto.SimpleResponses.Success;
@@ -58,6 +59,13 @@ public class ProfileController {
     @PostMapping("/notifications/read")
     public Success markNotificationsRead(@AuthenticationPrincipal Account actor) {
         support.markNotificationsRead(actor);
+        return Success.OK;
+    }
+
+    /** Contact form; open to visitors who are not signed in. */
+    @PostMapping("/contact")
+    public Success contact(@AuthenticationPrincipal Account actor, @Valid @RequestBody ContactRequest request) {
+        support.contact(actor, request);
         return Success.OK;
     }
 

@@ -515,8 +515,11 @@ class TalkCareApiIntegrationTest {
         assertThat(booked.body().path("professionalName").asString()).contains("Eleanor Reyes");
         int id = booked.body().path("id").asInt();
 
+        Res sameSlot = post("/api/appointments", clientToken, body);
+        assertThat(sameSlot.status()).isEqualTo(409);
+        assertThat(sameSlot.error()).isEqualTo("That time slot is already booked.");
         body.put("start", when.plusMinutes(30).toString());
-        assertThat(post("/api/appointments", clientToken, body).status()).as("overlap").isEqualTo(409);
+        assertThat(post("/api/appointments", clientToken, body).error()).as("overlap").isEqualTo("That time slot is already booked.");
 
         assertThat(get("/api/appointments", psychiatristToken).body()).hasSize(1);
         assertThat(get("/api/appointments", attorneyToken).body()).isEmpty();
@@ -537,5 +540,33 @@ class TalkCareApiIntegrationTest {
         assertThat(call("PATCH", "/api/appointments/" + id + "/status", psychiatristToken,
                 java.util.Map.of("status", "COMPLETED")).status()).isEqualTo(409);
         assertThat(get("/api/notifications", clientToken).body().toString()).contains("is now confirmed");
+    }
+
+    @Test
+    @Order(11)
+    void contactAndAccountStatus() throws Exception {
+        assertThat(post("/api/contact", null, java.util.Map.of("name", "Visitor")).error())
+                .isEqualTo("Please enter your name, email and message.");
+        Res sent = post("/api/contact", null, java.util.Map.of(
+                "name", "Visitor", "email", "visitor@example.com", "message", "How do I book a session?"));
+        assertThat(sent.status()).as(sent.body().toString()).isEqualTo(200);
+        assertThat(get("/api/notifications", adminToken).body().toString()).contains("How do I book a session?");
+
+        String psyToken = login("new.psy", "Password#1");
+        int psyId = get("/api/auth/me", psyToken).body().path("id").asInt();
+        int adminId = get("/api/auth/me", adminToken).body().path("id").asInt();
+
+        assertThat(call("PATCH", "/api/admin/users/" + psyId + "/status", clientToken,
+                java.util.Map.of("action", "SUSPEND")).status()).isEqualTo(403);
+        assertThat(call("PATCH", "/api/admin/users/" + adminId + "/status", adminToken,
+                java.util.Map.of("action", "SUSPEND")).error()).isEqualTo("You cannot change the status of your own account.");
+        Res suspended = call("PATCH", "/api/admin/users/" + psyId + "/status", adminToken, java.util.Map.of("action", "SUSPEND"));
+        assertThat(suspended.body().path("status").asString()).isEqualTo("SUSPENDED");
+        assertThat(get("/api/auth/me", psyToken).status()).isEqualTo(401);
+        assertThat(post("/api/auth/login", null, java.util.Map.of("username", "new.psy", "password", "Password#1")).status())
+                .isEqualTo(401);
+        Res back = call("PATCH", "/api/admin/users/" + psyId + "/status", adminToken, java.util.Map.of("action", "REACTIVATE"));
+        assertThat(back.body().path("status").asString()).isEqualTo("ACTIVE");
+        assertThat(get("/api/notifications", login("new.psy", "Password#1")).body().toString()).contains("reactivated");
     }
 }
