@@ -1,0 +1,58 @@
+# TalkCare API configuration. Every value comes from the same environment variables the
+# Express version used (see .env.example). A local .env file is loaded when present.
+spring:
+  application:
+    name: talkcare-api
+  config:
+    import: optional:file:.env[.properties]
+  main:
+    banner-mode: off
+  threads:
+    virtual:
+      enabled: true
+  flyway:
+    locations: classpath:db/migration
+    # The SQL files contain no ${...} placeholders; keep PL/pgSQL bodies untouched.
+    placeholder-replacement: false
+  web:
+    resources:
+      # Only /uploads/** serves files; anything else unknown is a JSON 404.
+      add-mappings: false
+  autoconfigure:
+    exclude:
+      # Accounts live in PostgreSQL; there is no in-memory user store.
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+
+server:
+  port: ${PORT:4000}
+  shutdown: graceful
+  # Same as Express `trust proxy`: honour X-Forwarded-* from the hosting platform's proxy.
+  forward-headers-strategy: native
+
+talkcare:
+  environment: ${APP_ENV:${NODE_ENV:development}}
+  database:
+    url: ${DATABASE_URL:}
+    unpooled-url: ${DATABASE_URL_UNPOOLED:}
+    pool-max: ${DB_POOL_MAX:10}
+  cors-origins: ${CORS_ORIGIN:*}
+  public-base-url: ${PUBLIC_BASE_URL:}
+  jwt:
+    secret: ${JWT_SECRET:}
+    expires-in: ${JWT_EXPIRES_IN:12h}
+  upload-dir: ${UPLOAD_DIR:./uploads}
+  max-request-bytes: 15MB
+  timezone: ${APP_TIMEZONE:Asia/Manila}
+  reset-url: ${TALKCARE_RESET_URL:http://localhost:54321}
+  smtp:
+    host: ${TALKCARE_SMTP_HOST:}
+    port: ${TALKCARE_SMTP_PORT:587}
+    username: ${TALKCARE_SMTP_USERNAME:}
+    password: ${TALKCARE_SMTP_PASSWORD:}
+    from: ${TALKCARE_SMTP_FROM:}
+  seed:
+    allow-in-production: ${ALLOW_SEED:false}
+    client-password: ${SEED_CLIENT_PASSWORD:TalkCareUser#2026}
+    attorney-password: ${SEED_ATTORNEY_PASSWORD:TalkCareCaseHandler#2026}
+    psychiatrist-password: ${SEED_PSYCHIATRIST_PASSWORD:TalkCareTherapist#2026}
+    admin-password: ${SEED_ADMIN_PASSWORD:TalkCareAdmin#2026}

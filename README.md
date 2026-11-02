@@ -1,59 +1,77 @@
 # TalkCare API
 
 REST API for the **TalkCare** desktop app (Mental Health & Justice Platform).
-Express 5 + PostgreSQL on **Neon**. The desktop app (separate repository) is only a UI and
+Spring Boot + PostgreSQL on **Neon**. The desktop app (separate repository) is only a UI and
 calls this API for everything; it has no database credentials.
 
 ## Architecture
 
+Spring Boot 4 (Java 21) + PostgreSQL on **Neon**, layered the standard Spring way:
+
 ```
-src/
-├── index.js            # starts the HTTP server
-├── app.js              # Express app factory (CORS, JSON, /uploads, /api, errors)
-├── config.js           # environment configuration
-├── db.js               # connection provider: Neon serverless driver or node-postgres
-├── errors.js           # AppError hierarchy → stable error codes
-├── domain/
-│   ├── accounts.js     # Account → Client | Administrator | Professional → Attorney | Psychiatrist
-│   └── constants.js    # roles, permissions, services, report statuses
-├── repositories/       # all SQL lives here
-├── services/           # business rules, transactions, authorization
-├── middleware/         # authenticate (JWT) / requirePermission / error handler
-└── routes/index.js     # route table
-db/migrations/          # versioned SQL (from docs/schema.md)
-scripts/                # migrate.js, seed.js
-docs/schema.md          # normalized schema design (class-table inheritance)
+src/main/java/com/talkcare/api/
+├── TalkCareApiApplication.java   # entry point (server, or `migrate` / `seed` command)
+├── config/        # @ConfigurationProperties, Neon URL → Hikari pool, Flyway baseline, /uploads, body limit
+├── domain/        # Account → Client | Administrator | Professional → Attorney | Psychiatrist,
+│                  # Report, Conversation, Message, enums (Role, ServiceType, ReportStatus, ...)
+├── repository/    # @Repository classes; all SQL lives here (Spring JdbcClient)
+├── service/       # @Service classes: business rules, transactions, authorization
+├── security/      # Spring Security filter chain, JWT session tokens, JSON 401/403
+├── storage/       # FileStorage interface + LocalFileStorage
+├── mail/          # SMTP for password reset
+├── error/         # ApiException hierarchy → stable error codes, @RestControllerAdvice
+├── task/          # CLI tasks: migrate, seed
+└── web/           # @RestController classes and request/response DTOs (records + Bean Validation)
+src/main/resources/
+├── application.yml          # maps the environment variables below
+└── db/migration/V*.sql      # Flyway migrations (from docs/schema.md)
+docs/schema.md               # normalized schema design (class-table inheritance)
 ```
 
-Dependency rule: `routes → services → repositories → db`. Authorization is permission-based
-(`account.can(permission)`, permissions come from `role_permissions`) plus polymorphic
-resource checks (`account.canAccessConversation(...)`, `account.canAccessReport(...)`).
-No endpoint compares role strings.
+Dependency rule: `web → service → repository → database`. Authorization is permission-based:
+permission codes from `role_permissions` become Spring Security authorities and are checked with
+`@PreAuthorize("hasAuthority('reports.create')")`; resource access is polymorphic
+(`account.canAccessConversation(...)`, `account.canAccessReport(...)`). No endpoint compares role strings.
 
 ## Setup with Neon
+
+Requires Java 21. The Maven wrapper (`./mvnw`) downloads Maven itself.
 
 1. Create a Neon project and a database (e.g. `talkcare`).
 2. Copy the connection strings from the Neon console:
    ```bash
    cp .env.example .env
    ```
-   - `DATABASE_URL`: the **pooled** string (host contains `-pooler`), used by the API.
+   - `DATABASE_URL`: the **pooled** string (host contains `-pooler`), used by the API. The
+     `postgresql://user:pass@host/db?sslmode=require` form from the console is used as-is.
    - `DATABASE_URL_UNPOOLED`: the **direct** string, used by migrations.
-   - `JWT_SECRET`: a long random value:
-     `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`
-3. Install, migrate, seed, run:
+   - `JWT_SECRET`: at least 32 random characters, e.g. `openssl rand -hex 48`.
+3. Build, migrate, seed, run:
    ```bash
-   npm install
-   npm run db:migrate   # applies db/migrations/*.sql once each (tracked in schema_migrations)
-   npm run db:seed      # optional: the four test accounts below
-   npm run dev          # http://localhost:4000
+   ./mvnw package                            # builds target/talkcare-api.jar (runs the tests)
+   java -jar target/talkcare-api.jar migrate # applies pending migrations and exits
+   java -jar target/talkcare-api.jar seed    # optional: the four test accounts below
+   java -jar target/talkcare-api.jar         # http://localhost:4000
    ```
+   During development, `./mvnw spring-boot:run` starts the server directly.
 
-For `*.neon.tech` hosts the API uses `@neondatabase/serverless` (WebSockets, suits serverless
-hosts). Any other host uses `pg` over TCP, so a local Postgres also works for development.
-Override with `DB_DRIVER=neon|pg`.
+Flyway also applies pending migrations every time the server starts, so the `migrate` step is
+optional; it's useful as a separate release step.
 
-### Test accounts (`npm run db:seed`)
+### Moving from the Express version
+
+Same database, same environment variables, same endpoints and JSON, same port:
+
+- **Migrations:** on its first run against a database migrated by `npm run db:migrate`, the API reads
+  the old `schema_migrations` table, baselines Flyway at that version and applies only newer files.
+  Nothing is re-run. The old table is left in place.
+- **Sessions and passwords:** JWTs (HS256, same claims) and bcrypt hashes are compatible both ways.
+  Keep the same `JWT_SECRET` and signed-in users stay signed in. The secret must now be at least
+  32 characters in every environment; a shorter one means issuing a new secret (users sign in again).
+- `DB_DRIVER` is gone: Java always connects over TCP with TLS, which Neon supports.
+- `NODE_ENV=production` is still recognised; `APP_ENV` is the new name.
+
+### Test accounts (`java -jar target/talkcare-api.jar seed`)
 
 | Role | Username | Email | Password |
 | --- | --- | --- | --- |
@@ -69,6 +87,12 @@ Override the passwords with `SEED_CLIENT_PASSWORD`, `SEED_ATTORNEY_PASSWORD`,
 ## Endpoints
 
 Authenticate with `Authorization: Bearer <sessionToken>` (returned by login/register).
+`/api/auth/login` takes an optional `role` (`CLIENT`, `ATTORNEY`, `PSYCHIATRIST`, `ADMIN`); when sent,
+only an account with that role can sign in. Professional registration adds `licenseNo` (roll of
+attorneys / PRC license, required) and `affiliation` (law firm / clinic, optional). New professionals
+start `PENDING_VERIFICATION`, submit an ID like clients, and are only assigned clients after an admin
+approves it. Admin accounts cannot self-register.
+
 Errors are `{ "error": "<message>", "code": "VALIDATION_ERROR|UNAUTHENTICATED|FORBIDDEN|NOT_FOUND|CONFLICT|..." }`.
 
 | Method | Path | Permission |
@@ -76,6 +100,7 @@ Errors are `{ "error": "<message>", "code": "VALIDATION_ERROR|UNAUTHENTICATED|FO
 | GET | `/api/health` | public |
 | GET | `/api/lookups` (services, concern types, ID types) | public |
 | POST | `/api/auth/login` · `/api/auth/register` · `/api/auth/logout` | public |
+| POST | `/api/auth/register/attorney` · `/api/auth/register/psychiatrist` | public |
 | POST | `/api/auth/forgot-password` · `/api/auth/reset-password` | public |
 | GET | `/api/auth/me` | signed in |
 | PATCH | `/api/profile` · POST `/api/profile/photo` | signed in |
@@ -94,16 +119,31 @@ Errors are `{ "error": "<message>", "code": "VALIDATION_ERROR|UNAUTHENTICATED|FO
 | GET/POST | `/api/admin/pending-requests` · `/api/admin/pending-requests/action` | `verifications.review` / `reports.update.status` |
 | GET | `/api/admin/activity` | `admin.activity.read` |
 
+## Tests
+
+```bash
+./mvnw test
+```
+
+Integration tests start an embedded PostgreSQL, apply the Flyway migrations and exercise the HTTP API,
+including a session token and password hash produced by the Express version. No Docker or Neon
+database is needed.
+
 ## Deployment notes
 
-- Set `NODE_ENV=production`, a strong `JWT_SECRET`, `CORS_ORIGIN`, and `DATABASE_URL`.
-  Run `npm run db:migrate` as a release step.
+- Deploy wherever the Express version ran, as long as Java 21 is available: a Java buildpack
+  (Railway, Heroku-style), or the included `Dockerfile` (Render, Fly.io, a VM).
+  The start command is `java -jar target/talkcare-api.jar`; the release step is
+  `java -jar target/talkcare-api.jar migrate`.
+- Set `APP_ENV=production`, a strong `JWT_SECRET`, `CORS_ORIGIN`, and `DATABASE_URL` (plus
+  `DATABASE_URL_UNPOOLED` for migrations).
 - `CORS_ORIGIN` must include the origin the desktop UI is served from (`http://localhost:54321` by default).
 - **Uploads** (profile photos, ID documents, chat photos) are written to `UPLOAD_DIR` and served from
-  `/uploads`. That needs a persistent disk (Render, Railway, Fly volumes, a VM). On serverless hosts
-  replace `LocalStorage` in `src/services/storage.js` with object storage (S3, R2, Vercel Blob).
+  `/uploads`. That needs a persistent disk (Render, Railway, Fly volumes, a VM; the Docker image uses
+  `/data/uploads`). On hosts without one, implement `FileStorage` with object storage (S3, R2).
   Filenames are random UUIDs, but the files are not access-controlled, so ID documents especially
   should move to private storage with signed URLs before production.
 - Sessions are stateless JWTs (`JWT_EXPIRES_IN`, default 12h). Logout discards the token on the client;
   suspending a user (`users.status`) takes effect on their next request.
 - Password-reset email needs the `TALKCARE_SMTP_*` variables; without them the endpoint returns 503.
+- Request bodies are capped at 15 MB (images arrive as base64 data URLs).
