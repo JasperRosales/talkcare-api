@@ -101,6 +101,8 @@ Errors are `{ "error": "<message>", "code": "VALIDATION_ERROR|UNAUTHENTICATED|FO
 | GET | `/api/lookups` (services, concern types, ID types) | public |
 | POST | `/api/auth/login` · `/api/auth/register` · `/api/auth/logout` | public |
 | POST | `/api/auth/register/attorney` · `/api/auth/register/psychiatrist` | public |
+| GET · POST | `/api/appointments` (admins: `?date=YYYY-MM-DD`) | signed in; booking: clients |
+| PATCH | `/api/appointments/{id}/status` (`CONFIRMED`, `COMPLETED`, `CANCELLED`, `NO_SHOW`) | assigned professional, the client (cancel only), admins |
 | POST | `/api/auth/forgot-password` · `/api/auth/reset-password` | public |
 | GET | `/api/auth/me` | signed in |
 | PATCH | `/api/profile` · POST `/api/profile/photo` | signed in |

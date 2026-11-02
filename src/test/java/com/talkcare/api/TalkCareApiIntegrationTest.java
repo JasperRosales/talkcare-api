@@ -493,4 +493,49 @@ class TalkCareApiIntegrationTest {
         assertThat(me.body().path("status").asString()).isEqualTo("VERIFIED");
         assertThat(me.body().path("acceptingClients").asBoolean()).isTrue();
     }
+
+    @Test
+    @Order(10)
+    void appointments() throws Exception {
+        java.time.LocalDateTime when = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Manila")).plusDays(2).atTime(10, 0);
+        var body = new java.util.HashMap<String, Object>(java.util.Map.of(
+                "serviceType", "THOMATT", "start", when.toString(), "durationMinutes", 60, "notes", "First session"));
+        assertThat(post("/api/appointments", psychiatristToken, body).status()).isEqualTo(403);
+
+        Res past = post("/api/appointments", clientToken, java.util.Map.of("serviceType", "THOMATT",
+                "start", when.minusDays(5).toString()));
+        assertThat(past.error()).isEqualTo("Please choose a time at least 30 minutes from now.");
+        assertThat(post("/api/appointments", clientToken, java.util.Map.of("serviceType", "THOMATT",
+                "start", when.toString(), "durationMinutes", 20)).error()).isEqualTo("Sessions last 30, 45, 60 or 90 minutes.");
+
+        Res booked = post("/api/appointments", clientToken, body);
+        assertThat(booked.status()).as(booked.body().toString()).isEqualTo(201);
+        assertThat(booked.body().path("status").asString()).isEqualTo("SCHEDULED");
+        assertThat(booked.body().path("statusLabel").asString()).isEqualTo("Requested");
+        assertThat(booked.body().path("professionalName").asString()).contains("Eleanor Reyes");
+        int id = booked.body().path("id").asInt();
+
+        body.put("start", when.plusMinutes(30).toString());
+        assertThat(post("/api/appointments", clientToken, body).status()).as("overlap").isEqualTo(409);
+
+        assertThat(get("/api/appointments", psychiatristToken).body()).hasSize(1);
+        assertThat(get("/api/appointments", attorneyToken).body()).isEmpty();
+        assertThat(get("/api/appointments?date=" + when.toLocalDate(), adminToken).body()).hasSize(1);
+        assertThat(get("/api/appointments?date=nope", adminToken).status()).isEqualTo(400);
+        assertThat(get("/api/notifications", psychiatristToken).body().toString()).contains("requested a session");
+
+        assertThat(call("PATCH", "/api/appointments/" + id + "/status", clientToken,
+                java.util.Map.of("status", "CONFIRMED")).status()).isEqualTo(403);
+        assertThat(call("PATCH", "/api/appointments/" + id + "/status", attorneyToken,
+                java.util.Map.of("status", "CONFIRMED")).status()).isEqualTo(404);
+        Res confirmed = call("PATCH", "/api/appointments/" + id + "/status", psychiatristToken,
+                java.util.Map.of("status", "CONFIRMED"));
+        assertThat(confirmed.body().path("statusLabel").asString()).isEqualTo("Confirmed");
+        Res cancelled = call("PATCH", "/api/appointments/" + id + "/status", clientToken,
+                java.util.Map.of("status", "CANCELLED"));
+        assertThat(cancelled.body().path("status").asString()).isEqualTo("CANCELLED");
+        assertThat(call("PATCH", "/api/appointments/" + id + "/status", psychiatristToken,
+                java.util.Map.of("status", "COMPLETED")).status()).isEqualTo(409);
+        assertThat(get("/api/notifications", clientToken).body().toString()).contains("is now confirmed");
+    }
 }
