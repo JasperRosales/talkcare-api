@@ -5,6 +5,7 @@ import com.talkcare.api.domain.ServiceType;
 import com.talkcare.api.domain.account.Account;
 import com.talkcare.api.domain.account.Client;
 import com.talkcare.api.domain.account.Professional;
+import com.talkcare.api.domain.activity.Notification;
 import com.talkcare.api.domain.chat.Conversation;
 import com.talkcare.api.domain.chat.Message;
 import com.talkcare.api.domain.lookup.ServiceTypeInfo;
@@ -17,6 +18,7 @@ import com.talkcare.api.repository.ConversationRepository;
 import com.talkcare.api.repository.LookupRepository;
 import com.talkcare.api.repository.MessageRepository;
 import com.talkcare.api.repository.MessageRepository.NewMessage;
+import com.talkcare.api.repository.NotificationRepository;
 import com.talkcare.api.storage.FileStorage;
 import com.talkcare.api.storage.UploadPolicy;
 import com.talkcare.api.web.dto.SendMessageRequest;
@@ -33,14 +35,16 @@ public class ChatService {
     private final MessageRepository messages;
     private final LookupRepository lookups;
     private final FileStorage storage;
+    private final NotificationRepository notifications;
     private final TransactionTemplate transaction;
 
     public ChatService(ConversationRepository conversations, MessageRepository messages, LookupRepository lookups,
-                       FileStorage storage, TransactionTemplate transaction) {
+                       FileStorage storage, NotificationRepository notifications, TransactionTemplate transaction) {
         this.conversations = conversations;
         this.messages = messages;
         this.lookups = lookups;
         this.storage = storage;
+        this.notifications = notifications;
         this.transaction = transaction;
     }
 
@@ -128,6 +132,7 @@ public class ChatService {
         }
     }
 
+    /** The professional's reply; the client gets an in-app notification in the same transaction. */
     public Message sendProfessionalReply(Account actor, String conversationId, String text) {
         Conversation conversation = loadAccessible(actor, conversationId);
         if (text == null) {
@@ -136,6 +141,8 @@ public class ChatService {
         Integer id = transaction.execute(status -> {
             int messageId = messages.create(NewMessage.from(conversation.id(), actor.id(), text, null));
             conversations.touch(conversation.id());
+            notifications.create(conversation.clientId(), Notification.MESSAGE,
+                    actor.displayName() + " replied to your " + conversation.title() + " conversation.");
             return messageId;
         });
         return messages.listByIds(List.of(id)).getFirst();
