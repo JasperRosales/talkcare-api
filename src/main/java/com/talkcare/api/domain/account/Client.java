@@ -28,7 +28,7 @@ public final class Client extends Account {
 
     @Override
     public String dashboardView() {
-        return "home";
+        return "dashboard";
     }
 
     @Override

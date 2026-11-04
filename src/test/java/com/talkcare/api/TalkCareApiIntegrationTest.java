@@ -153,7 +153,7 @@ class TalkCareApiIntegrationTest {
         JsonNode body = ok.body();
         assertThat(body.path("role").asString()).isEqualTo("CLIENT");
         assertThat(body.path("roleDisplayName").asString()).isEqualTo("Client");
-        assertThat(body.path("dashboardView").asString()).isEqualTo("home");
+        assertThat(body.path("dashboardView").asString()).isEqualTo("dashboard");
         assertThat(body.path("status").asString()).isEqualTo("VERIFIED");
         assertThat(body.has("preferredService")).isTrue();
         assertThat(body.path("preferredService").isNull()).isTrue();
@@ -299,6 +299,10 @@ class TalkCareApiIntegrationTest {
         Res reply = post("/api/conversations/" + conversationId + "/replies", psychiatristToken, java.util.Map.of("messageText", "Hi"));
         assertThat(reply.status()).isEqualTo(201);
         assertThat(reply.body().path("senderName").asString()).isEqualTo("Dr. Eleanor Reyes");
+        Res clientNotifications = get("/api/notifications", clientToken);
+        assertThat(clientNotifications.body().get(0).path("type").asString()).isEqualTo("MESSAGE");
+        assertThat(clientNotifications.body().get(0).path("message").asString())
+                .isEqualTo("Dr. Eleanor Reyes replied to your ThoMatt Consultation conversation.");
 
         assertThat(get("/api/conversations/" + conversationId, attorneyToken).status()).isEqualTo(404);
         assertThat(post("/api/conversations/" + conversationId + "/replies", clientToken, java.util.Map.of("messageText", "x")).status())

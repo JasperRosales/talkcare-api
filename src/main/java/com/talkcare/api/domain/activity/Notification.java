@@ -8,4 +8,5 @@ public record Notification(int id, String type, String message, boolean read, In
     public static final String SYSTEM = "SYSTEM";
     public static final String REPORT = "REPORT";
     public static final String VERIFICATION = "VERIFICATION";
+    public static final String MESSAGE = "MESSAGE";
 }
