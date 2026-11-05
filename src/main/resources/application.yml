@@ -50,6 +50,11 @@ talkcare:
     username: ${TALKCARE_SMTP_USERNAME:}
     password: ${TALKCARE_SMTP_PASSWORD:}
     from: ${TALKCARE_SMTP_FROM:}
+  gemini:
+    # TalkCare Chatbot. Set GEMINI_API_KEY in the Render environment; the chatbot answers 503 without it.
+    api-key: ${GEMINI_API_KEY:}
+    # Tried in order; a busy model (429/5xx) falls through to the next.
+    models: ${GEMINI_MODELS:gemini-3.5-flash,gemini-flash-latest,gemini-3.8-flash}
   seed:
     allow-in-production: ${ALLOW_SEED:false}
     client-password: ${SEED_CLIENT_PASSWORD:TalkCareUser#2026}

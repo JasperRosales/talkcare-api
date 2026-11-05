@@ -118,10 +118,29 @@ Errors are `{ "error": "<message>", "code": "VALIDATION_ERROR|UNAUTHENTICATED|FO
 | GET | `/api/conversations/:id` · `/api/conversations/:id/messages` | participant |
 | POST | `/api/conversations/:id/messages` (client + auto-reply) | `messages.send` |
 | POST | `/api/conversations/:id/replies` | `messages.reply` |
+| GET · POST | `/api/chatbot/messages` (POST `{message}`; TalkCare Chatbot) · POST `/api/chatbot/reset` | `conversations.create` (clients) |
 | GET | `/api/admin/metrics` · `/api/admin/schedule` | `admin.dashboard` |
 | GET | `/api/admin/users` | `users.read` |
 | GET/POST | `/api/admin/pending-requests` · `/api/admin/pending-requests/action` | `verifications.review` / `reports.update.status` |
 | GET | `/api/admin/activity` | `admin.activity.read` |
+
+## TalkCare Chatbot (Gemini)
+
+`/api/chatbot` answers clients with Google Gemini. The key stays on the server: set `GEMINI_API_KEY`
+(and optionally `GEMINI_MODELS`, tried in order when one is busy). Without a key the chatbot answers
+`503`. The conversation is kept in memory per account (not in the database) and is cleared on logout,
+on `POST /api/chatbot/reset`, or after two idle hours.
+
+Guardrails (`chatbot/ChatGuardrails`):
+- **Scope**: mental health and well-being, general Philippine legal-rights and victim-support
+  information, and how to use TalkCare. Anything else is politely declined. No diagnoses, medication,
+  case-specific legal advice, or invented app features; it refers users to ThoMatt or JusticeCare.
+- **Crisis language** (English and Filipino) is answered on the server with 911 and the NCMH Crisis
+  Hotline 1553 without calling Gemini.
+- **Prompt injection / jailbreaks** and clearly harmful requests are refused before reaching Gemini;
+  replies that leak the instructions are replaced. Gemini safety settings are at `BLOCK_LOW_AND_ABOVE`.
+- **Limits**: 800 characters per message, one message per 3 seconds and 40 per hour per account,
+  60 Gemini calls per minute overall, last 12 messages as context.
 
 ## Tests
 
@@ -141,6 +160,7 @@ database is needed.
   `java -jar target/talkcare-api.jar migrate`.
 - Set `APP_ENV=production`, a strong `JWT_SECRET`, `CORS_ORIGIN`, and `DATABASE_URL` (plus
   `DATABASE_URL_UNPOOLED` for migrations).
+- Set `GEMINI_API_KEY` for the TalkCare Chatbot.
 - `CORS_ORIGIN` must include the origin the desktop UI is served from (`http://localhost:54321` by default).
 - **Uploads** (profile photos, ID documents, chat photos) are written to `UPLOAD_DIR` and served from
   `/uploads`. That needs a persistent disk (Render, Railway, Fly volumes, a VM; the Docker image uses
