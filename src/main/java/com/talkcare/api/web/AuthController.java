@@ -1,5 +1,6 @@
 package com.talkcare.api.web;
 
+import com.talkcare.api.chatbot.ChatbotService;
 import com.talkcare.api.domain.Role;
 import com.talkcare.api.domain.account.Account;
 import com.talkcare.api.service.AuthService;
@@ -26,9 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService auth;
+    private final ChatbotService chatbot;
 
-    public AuthController(AuthService auth) {
+    public AuthController(AuthService auth, ChatbotService chatbot) {
         this.auth = auth;
+        this.chatbot = chatbot;
     }
 
     @PostMapping("/login")
@@ -64,9 +67,13 @@ public class AuthController {
         return new Info(auth.resetPassword(request));
     }
 
-    /** Tokens are stateless JWTs; logout is acknowledged and the client discards its token. */
+    /**
+     * Tokens are stateless JWTs; logout is acknowledged and the client discards its token. A signed-in
+     * caller's TalkCare Chatbot conversation is forgotten.
+     */
     @PostMapping("/logout")
-    public Success logout() {
+    public Success logout(@AuthenticationPrincipal Account actor) {
+        if (actor != null) chatbot.clear(actor);
         return Success.OK;
     }
 
