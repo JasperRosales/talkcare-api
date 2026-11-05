@@ -29,15 +29,13 @@ public record TalkCareProperties(
         @NotNull ZoneId timezone,
         String resetUrl,
         @NotNull Smtp smtp,
-        @NotNull Seed seed,
-        Gemini gemini) {
+        @NotNull Seed seed) {
 
     public TalkCareProperties {
         corsOrigins = corsOrigins == null ? List.of() : corsOrigins.stream().map(String::trim).filter(StringUtils::hasText).toList();
         publicBaseUrl = stripTrailingSlashes(publicBaseUrl);
         resetUrl = stripTrailingSlashes(resetUrl);
         uploadDir = uploadDir.toAbsolutePath().normalize();
-        gemini = gemini == null ? new Gemini("", List.of()) : gemini;
     }
 
     public boolean isProduction() {
@@ -74,19 +72,6 @@ public record TalkCareProperties(
         public boolean isConfigured() {
             return StringUtils.hasText(host) && StringUtils.hasText(username)
                     && StringUtils.hasText(password) && StringUtils.hasText(from);
-        }
-    }
-
-    /** TalkCare Chatbot: Gemini key (GEMINI_API_KEY) and the models to try in order. */
-    public record Gemini(String apiKey, List<String> models) {
-
-        public Gemini {
-            apiKey = apiKey == null ? "" : apiKey.trim();
-            models = models == null ? List.of() : models.stream().map(String::trim).filter(StringUtils::hasText).toList();
-        }
-
-        public boolean isConfigured() {
-            return !apiKey.isEmpty() && !models.isEmpty();
         }
     }
 
